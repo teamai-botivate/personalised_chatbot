@@ -293,7 +293,8 @@ from google_auth_oauthlib.flow import Flow
 async def exchange_google_token(code_data: dict, db: AsyncSession = Depends(get_db)):
     code = code_data.get("code")
     company_id = code_data.get("company_id")
-    
+    redirect_uri = code_data.get("redirect_uri", settings.google_oauth_redirect_uri)
+
     if not code or not company_id:
         raise HTTPException(status_code=400, detail="Missing authorization code or company_id.")
         
@@ -321,7 +322,7 @@ async def exchange_google_token(code_data: dict, db: AsyncSession = Depends(get_
                 'https://www.googleapis.com/auth/spreadsheets',
                 'https://www.googleapis.com/auth/drive'
             ],
-            redirect_uri=settings.google_oauth_redirect_uri
+            redirect_uri=redirect_uri
         )
         
         # Exchange the code for the tokens

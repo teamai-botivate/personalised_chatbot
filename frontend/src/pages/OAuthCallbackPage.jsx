@@ -46,7 +46,8 @@ export default function OAuthCallbackPage() {
                 // Exchange code for tokens on backend
                 await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/companies/oauth-exchange`, {
                     code: code,
-                    company_id: companyId
+                    company_id: companyId,
+                    redirect_uri: `${window.location.origin}/oauth/callback`
                 });
 
                 toast.success("Google connected successfully!", { id: 'oauth' });
