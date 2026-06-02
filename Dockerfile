@@ -6,7 +6,7 @@ WORKDIR /app/backend
 COPY backend/requirements.txt .
 
 # Install dependencies with UV (faster)
-RUN pip install uv && uv pip install -r requirements.txt
+RUN pip install uv && uv pip install --system -r requirements.txt
 
 # Copy backend code
 COPY backend/app ./app
