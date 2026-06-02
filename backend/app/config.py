@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
 
     # --- Google Sheets / OAuth ---
+    google_sheet_id: str = ""
     google_service_account_json: str = ""
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""

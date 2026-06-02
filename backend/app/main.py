@@ -25,6 +25,7 @@ from app.database import init_db, async_session_factory
 from app.routers.company_router import router as company_router
 from app.routers.auth_router import router as auth_router
 from app.routers.chat_router import router as chat_router
+from app.services.auto_setup import auto_setup_database
 
 
 # ── Background Scheduler ─
@@ -36,8 +37,13 @@ scheduler = AsyncIOScheduler()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: create tables & start scheduler. Shutdown: stop scheduler."""
+    """Startup: create tables, auto-setup DB, start scheduler. Shutdown: stop scheduler."""
     await init_db()
+
+    # Auto-setup database on first startup
+    async with async_session_factory() as session:
+        await auto_setup_database(session)
+
     scheduler.start()
     print(f"🚀 {settings.app_name} is running!")
     yield
