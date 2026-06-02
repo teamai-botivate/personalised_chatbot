@@ -95,15 +95,16 @@ async def send_message(
         # Check for "tell me about me" or "my data"
         elif any(word in user_msg for word in ["tell", "show", "my data", "my details", "about me", "who am i"]):
             if employee_data:
-                # Format employee data nicely with categories
+                # Format employee data in plain text with sections
+                reply_parts = []
+
+                # Group by sections
                 sections = {
                     "Personal Information": ["Employee Name", "Email", "Phone Number", "Date of Birth", "Gender", "Blood Group"],
                     "Employment Details": ["Employee ID", "Department", "Designation", "Date of Joining", "Employment Type", "Manager", "Work Location"],
                     "Leave Information": ["Total Leave Balance", "Leaves Taken (This Year)", "Leaves Remaining", "Last Leave From Date", "Last Leave To Date"],
                     "Performance": ["Performance Rating", "Projects Assigned", "Skills", "Certifications", "Task Completion Rate"]
                 }
-
-                reply_parts = ["## 📋 Your Employee Information\n"]
 
                 for section, fields in sections.items():
                     section_data = {}
@@ -113,17 +114,18 @@ async def send_message(
                                 section_data[key] = value
 
                     if section_data:
-                        reply_parts.append(f"### {section}\n")
+                        reply_parts.append(f"\n{section}:")
                         for key, value in section_data.items():
-                            reply_parts.append(f"- **{key}**: {value}")
-                        reply_parts.append("")
+                            reply_parts.append(f"  • {key}: {value}")
 
-                reply = "\n".join(reply_parts)
-                if reply.count("###") == 0:  # No sections found, show all
-                    reply = "### Your Information\n"
+                if reply_parts:
+                    reply = "\n".join(reply_parts).strip()
+                else:
+                    # If no sections matched, show all data
+                    reply = "Your Information:\n"
                     for key, value in employee_data.items():
                         if value and key.lower() not in ["employee id"]:
-                            reply += f"- **{key}**: {value}\n"
+                            reply += f"  • {key}: {value}\n"
             else:
                 reply = f"I couldn't find your employee record. Your ID is {employee_id}."
 

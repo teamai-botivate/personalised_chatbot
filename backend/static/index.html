@@ -196,7 +196,7 @@
         .dashboard-content {
             flex: 1;
             padding: 1.5rem;
-            overflow-y: auto;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
         }
@@ -210,6 +210,7 @@
             height: 100%;
             max-width: 1000px;
             margin: 0 auto;
+            width: 100%;
             box-shadow: 0 20px 60px rgba(0,0,0,0.4);
             overflow: hidden;
         }
@@ -265,45 +266,15 @@
         }
 
         .message-bubble {
-            padding: 1.25rem 1.5rem;
+            padding: 1rem 1.5rem;
             border-radius: 14px;
             background: var(--bg);
             color: var(--text);
-            line-height: 1.7;
+            line-height: 1.6;
             word-wrap: break-word;
             overflow-x: auto;
             font-size: 0.95rem;
-        }
-
-        .message-bubble h2 {
-            margin: 0 0 1rem 0;
-            font-size: 1.15rem;
-            color: var(--secondary);
-            font-weight: 600;
-        }
-
-        .message-bubble h3 {
-            margin: 1rem 0 0.75rem 0;
-            font-size: 0.95rem;
-            color: var(--text);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            opacity: 0.9;
-        }
-
-        .message-bubble ul, .message-bubble ol {
-            margin: 0.75rem 0;
-            padding-left: 1.5rem;
-        }
-
-        .message-bubble li {
-            margin-bottom: 0.5rem;
-        }
-
-        .message-bubble strong {
-            color: var(--secondary);
-            font-weight: 600;
+            white-space: pre-wrap;
         }
 
         .message.user .message-bubble {
@@ -314,10 +285,6 @@
 
         .message.ai .message-bubble {
             border-bottom-left-radius: 4px;
-        }
-
-        .message.user .message-bubble strong {
-            color: rgba(255,255,255,0.9);
         }
 
         .typing {
@@ -595,26 +562,10 @@
             location.reload();
         }
 
-        // ===== Markdown Rendering =====
-        function markdownToHtml(text) {
-            let html = text;
-
-            // Headers
-            html = html.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
-            html = html.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
-
-            // Bold
-            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
-
-            // Lists - convert bullet points
-            html = html.replace(/^- (.*?)$/gm, '<li>$1</li>');
-            html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-
-            // Line breaks
-            html = html.replace(/\n/g, '<br>');
-
-            return html;
+        // ===== Plain Text Rendering =====
+        function renderPlainText(text) {
+            // Just replace newlines with <br> for readability
+            return text.replace(/\n/g, '<br>');
         }
 
         // ===== Chat =====
@@ -645,12 +596,8 @@
                 const bubble = document.createElement('div');
                 bubble.className = 'message-bubble';
 
-                // Render markdown for AI messages
-                if (msg.type === 'ai') {
-                    bubble.innerHTML = markdownToHtml(msg.text);
-                } else {
-                    bubble.textContent = msg.text;
-                }
+                // Just render plain text with line breaks
+                bubble.innerHTML = renderPlainText(msg.text);
 
                 if (msg.type === 'user') {
                     div.appendChild(bubble);
