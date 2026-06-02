@@ -1,4 +1,4 @@
-# Environments
+# Environments (except .env.example which is template)
 .env
 .venv
 env/
@@ -9,9 +9,7 @@ venv.bak/
 
 # Credentials & Secrets
 *.json
-!package.json
-!package-lock.json
-!vercel.json
+!.env.example
 credentials.json
 service-account.json
 token.pickle
@@ -65,12 +63,10 @@ Thumbs.db
 .agent/
 _agents/
 _agent/
+
+# Deployment (old files - keep only DEPLOYMENT.md)
 backenddeploy.md
 frontenddeploy.md
-
-# Documentation & Setup files
-*.md
-*.txt
 Procfile
 build.sh
 quick-start.bat
@@ -81,7 +77,12 @@ docker-compose.yml
 fix_urls.py
 backend/setup_data.py
 
-# Old frontend and docs (using vanilla JS in backend/static now)
+# Temporary documentation
+*.md
+!DEPLOYMENT.md
+*.txt
+
+# Old folders
 frontend/
 ai_prompts/
 docs/
