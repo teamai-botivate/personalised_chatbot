@@ -72,7 +72,7 @@ build.sh
 quick-start.bat
 quick-start.sh
 start.sh
-.python-version
+
 docker-compose.yml
 fix_urls.py
 backend/setup_data.py
