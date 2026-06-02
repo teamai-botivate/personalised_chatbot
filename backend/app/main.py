@@ -8,6 +8,7 @@ import os
 import time
 import logging
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -117,18 +118,13 @@ app.include_router(company_router)
 app.include_router(auth_router)
 app.include_router(chat_router)
 
+# ── Serve Static Files ─────────────────────────────────────
+static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+if os.path.exists(static_dir):
+    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 
 # ── Health Check ──────────────────────────────────────────
 
-@app.get("/")
-async def root():
-    return {
-        "app": settings.app_name,
-        "status": "running",
-        "version": "1.0.0",
-    }
-
-
-@app.get("/health")
+@app.get("/api/health")
 async def health():
     return {"status": "healthy"}
