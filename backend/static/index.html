@@ -25,6 +25,7 @@
             --header-height: 88px;
             --page-padding: clamp(0.75rem, 2vw, 1.5rem);
             --chat-padding: clamp(1rem, 2.4vw, 2rem);
+            --composer-max-height: min(32dvh, 180px);
         }
 
         html,
@@ -372,7 +373,9 @@
             font-family: inherit;
             font-size: 0.95rem;
             resize: none;
-            max-height: 120px;
+            max-height: var(--composer-max-height);
+            line-height: 1.45;
+            overflow-y: hidden;
             transition: border-color 0.2s, box-shadow 0.2s;
         }
 
@@ -483,6 +486,7 @@
                 --header-height: 70px;
                 --page-padding: 0;
                 --chat-padding: 0.9rem;
+                --composer-max-height: min(28dvh, 150px);
             }
 
             .dashboard-header {
@@ -536,7 +540,6 @@
 
             textarea {
                 min-height: 44px;
-                max-height: 96px;
                 padding: 0.75rem 0.85rem;
                 font-size: 0.9rem;
             }
@@ -644,6 +647,7 @@
                             id="messageInput"
                             placeholder="Ask me about your profile, details, or anything else..."
                             rows="1"
+                            oninput="autoResizeTextarea(this)"
                             onkeydown="handleKeyPress(event)"
                         ></textarea>
                         <button class="send-btn" onclick="handleSendMessage()" id="sendBtn">➤</button>
@@ -719,6 +723,28 @@
             return text.replace(/\n/g, '<br>');
         }
 
+        function autoResizeTextarea(textarea) {
+            textarea.style.height = 'auto';
+
+            const computedStyle = window.getComputedStyle(textarea);
+            const maxHeight = parseFloat(computedStyle.maxHeight);
+            const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
+
+            textarea.style.height = `${nextHeight}px`;
+            textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+
+        function resetTextarea(textarea) {
+            textarea.value = '';
+            textarea.style.height = 'auto';
+            textarea.style.overflowY = 'hidden';
+        }
+
         // ===== Chat =====
         let messages = [];
 
@@ -771,8 +797,7 @@
             if (!message) return;
 
             addMessage('user', message);
-            input.value = '';
-            input.style.height = 'auto';
+            resetTextarea(input);
 
             addMessage('ai', '');
             const typingMsgIndex = messages.length - 1;
@@ -831,6 +856,11 @@
                 userInfo = JSON.parse(savedUserInfo);
                 showDashboard();
                 initChat();
+            }
+
+            const messageInput = document.getElementById('messageInput');
+            if (messageInput) {
+                autoResizeTextarea(messageInput);
             }
         });
     </script>
