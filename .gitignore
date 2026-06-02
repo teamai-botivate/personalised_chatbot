@@ -64,7 +64,7 @@ Thumbs.db
 _agents/
 _agent/
 
-# Deployment (old files - keep only DEPLOYMENT.md)
+# Deployment (old files - keep only DEPLOYMENT.md and runtime.txt)
 backenddeploy.md
 frontenddeploy.md
 Procfile
@@ -76,6 +76,8 @@ start.sh
 docker-compose.yml
 fix_urls.py
 backend/setup_data.py
+render.yaml
+!runtime.txt
 
 # Temporary documentation
 *.md
