@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration_minutes: int = 480
 
+    # --- Admin Login (Hardcoded) ---
+    admin_username: str = "admin"
+    admin_password: str = "admin123"
+
     # --- ChromaDB ---
     chroma_persist_dir: str = "./chroma_data"
 

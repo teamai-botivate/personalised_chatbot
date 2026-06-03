@@ -29,7 +29,8 @@ async def send_message(
     Employees can only access their own information.
     """
     employee_id = user.employee_id
-    print(f"\n[CHAT LOG] 🗨️ New Chat Request from Employee: '{employee_id}'")
+    user_type = user.user_type
+    print(f"\n[CHAT LOG] 🗨️ New Chat Request from {user_type.upper()}: '{employee_id}'")
 
     # Fetch active company
     result = await db.execute(select(__import__('app.models.models', fromlist=['Company']).Company).where(
@@ -64,20 +65,28 @@ async def send_message(
 
     # Fetch employee data from external DB
     employee_data = {}
+    all_records = []
     try:
         adapter = await get_adapter(db_conn.db_type, db_conn.connection_config)
         primary_key = schema_map.get("primary_key", "")
 
         all_records = await adapter.get_all_records()
-        for rec in all_records:
-            rec_id = str(rec.get(primary_key, "")).strip()
-            if rec_id == employee_id.strip():
-                employee_data = rec
-                print(f"[CHAT LOG] ✅ Found employee record")
-                break
 
-        if not employee_data:
-            print(f"[CHAT LOG] ⚠️ WARNING: Could not find record for '{employee_id}'")
+        # For admin: access all records
+        # For employee: access only their own record
+        if user_type == "admin":
+            print(f"[CHAT LOG] ✅ Admin access - fetched all {len(all_records)} records")
+        else:
+            # Employee: filter to only their record
+            for rec in all_records:
+                rec_id = str(rec.get(primary_key, "")).strip()
+                if rec_id == employee_id.strip():
+                    employee_data = rec
+                    print(f"[CHAT LOG] ✅ Found employee record")
+                    break
+
+            if not employee_data:
+                print(f"[CHAT LOG] ⚠️ WARNING: Could not find record for '{employee_id}'")
 
     except Exception as e:
         print(f"[CHAT LOG] Error fetching employee data: {e}")
@@ -132,17 +141,19 @@ async def send_message(
         # Default: pass to agent for complex queries
         if not reply:
             print(f"[CHAT LOG] Complex query detected, passing to HR Agent...")
+            # For admin: pass all records; for employee: pass only their record
+            agent_context_data = all_records if user_type == "admin" else employee_data
             agent_result = await chat_with_agent(
                 company_id=company.id,
                 company_name=company.name,
                 employee_id=employee_id,
                 employee_name=user.employee_name,
-                role="employee",
+                role=user_type,
                 schema_map=schema_map,
                 db_config=db_conn.connection_config,
                 db_type=db_conn.db_type.value if db_conn else "google_sheets",
                 user_message=data.message,
-                employee_data=employee_data,
+                employee_data=agent_context_data,
                 chat_history=[],
                 employee_requests=[],
             )

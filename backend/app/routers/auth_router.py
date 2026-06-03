@@ -7,11 +7,18 @@ Uses Google Sheets for employee data
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from pydantic import BaseModel
 from app.database import get_db
 from app.models.schemas import LoginRequest, LoginResponse, TokenPayload
 from app.models.models import Company, DatabaseConnection
 from app.adapters.adapter_factory import get_adapter
 from app.utils.auth import create_access_token
+from app.config import settings
+
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -151,6 +158,7 @@ async def verify_mobile(data: LoginRequest, db: AsyncSession = Depends(get_db)):
         "employee_id": employee_id,
         "employee_name": employee_name,
         "mobile_number": mobile_number,
+        "user_type": "employee",
     }
     access_token = create_access_token(token_data)
 
@@ -162,4 +170,45 @@ async def verify_mobile(data: LoginRequest, db: AsyncSession = Depends(get_db)):
         employee_id=employee_id,
         employee_name=employee_name,
         mobile_number=mobile_number,
+        user_type="employee",
+    )
+
+
+@router.post("/verify-admin", response_model=LoginResponse)
+async def verify_admin(data: AdminLoginRequest):
+    """
+    Admin login with hardcoded credentials.
+    Admin has full unrestricted access to entire Google Sheet.
+    """
+    print(f"\n[AUTH LOG] 🔐 Starting Admin Verification")
+    print(f"[AUTH LOG] Username: '{data.username}'")
+
+    # Validate credentials
+    if data.username != settings.admin_username or data.password != settings.admin_password:
+        print(f"[AUTH LOG] ❌ FAILED: Invalid admin credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password.",
+        )
+
+    print(f"[AUTH LOG] ✅ Admin credentials verified")
+
+    # Create JWT token for admin
+    print(f"[AUTH LOG] Creating JWT token for admin...")
+    token_data = {
+        "employee_id": "admin",
+        "employee_name": "Administrator",
+        "mobile_number": "",
+        "user_type": "admin",
+    }
+    access_token = create_access_token(token_data)
+
+    print(f"[AUTH LOG] ✅ SUCCESS: Admin JWT token created")
+
+    return LoginResponse(
+        access_token=access_token,
+        employee_id="admin",
+        employee_name="Administrator",
+        mobile_number="",
+        user_type="admin",
     )

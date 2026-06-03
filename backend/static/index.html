@@ -421,6 +421,43 @@
             background: rgba(239, 68, 68, 0.1);
         }
 
+        /* Login Tabs */
+        .login-tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .login-tab {
+            padding: 0.75rem 1rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+            font-size: 0.95rem;
+        }
+
+        .login-tab.active {
+            color: var(--secondary);
+            border-bottom-color: var(--secondary);
+        }
+
+        .login-tab:hover {
+            color: var(--text);
+        }
+
+        .login-form {
+            display: none;
+        }
+
+        .login-form.active {
+            display: block;
+        }
+
         @media (max-width: 768px) {
             .login-card {
                 padding: 1.5rem;
@@ -466,8 +503,14 @@
     <div id="loginContainer" class="login-container active">
         <div class="login-card">
             <h1>Employee Portal</h1>
-            <p>Enter your mobile number to continue</p>
-            <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="login-tabs">
+                <button class="login-tab active" onclick="switchLoginTab('employee')">Employee Login</button>
+                <button class="login-tab" onclick="switchLoginTab('admin')">Admin Login</button>
+            </div>
+
+            <!-- Employee Login Form -->
+            <form id="employeeForm" class="login-form active" onsubmit="handleEmployeeLogin(event)">
+                <p>Enter your mobile number to continue</p>
                 <div class="form-group">
                     <label for="mobileNumber">Mobile Number</label>
                     <input
@@ -478,10 +521,36 @@
                         pattern="[0-9]{10}"
                         title="Enter 10-digit mobile number"
                     >
-                    <div class="error" id="loginError"></div>
+                    <div class="error" id="employeeLoginError"></div>
                 </div>
-                <button id="loginBtn" type="submit">Login</button>
-                <div class="loading" id="loginLoading">Verifying your number...</div>
+                <button id="employeeLoginBtn" type="submit">Login</button>
+                <div class="loading" id="employeeLoginLoading">Verifying your number...</div>
+            </form>
+
+            <!-- Admin Login Form -->
+            <form id="adminForm" class="login-form" onsubmit="handleAdminLogin(event)">
+                <p>Enter admin credentials</p>
+                <div class="form-group">
+                    <label for="adminUsername">Username</label>
+                    <input
+                        id="adminUsername"
+                        type="text"
+                        placeholder="admin"
+                        required
+                    >
+                </div>
+                <div class="form-group">
+                    <label for="adminPassword">Password</label>
+                    <input
+                        id="adminPassword"
+                        type="password"
+                        placeholder="Enter password"
+                        required
+                    >
+                    <div class="error" id="adminLoginError"></div>
+                </div>
+                <button id="adminLoginBtn" type="submit">Login</button>
+                <div class="loading" id="adminLoginLoading">Verifying credentials...</div>
             </form>
         </div>
     </div>
@@ -522,13 +591,34 @@
         let authToken = null;
         let userInfo = null;
 
-        // ===== Login =====
-        async function handleLogin(e) {
+        // ===== Login Tab Switching =====
+        function switchLoginTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.login-tab').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Update form visibility
+            document.getElementById('employeeForm').classList.remove('active');
+            document.getElementById('adminForm').classList.remove('active');
+
+            if (tab === 'employee') {
+                document.getElementById('employeeForm').classList.add('active');
+            } else {
+                document.getElementById('adminForm').classList.add('active');
+            }
+
+            // Clear errors
+            document.getElementById('employeeLoginError').textContent = '';
+            document.getElementById('adminLoginError').textContent = '';
+        }
+
+        // ===== Employee Login =====
+        async function handleEmployeeLogin(e) {
             e.preventDefault();
             const mobileNumber = document.getElementById('mobileNumber').value;
-            const errorDiv = document.getElementById('loginError');
-            const loginBtn = document.getElementById('loginBtn');
-            const loginLoading = document.getElementById('loginLoading');
+            const errorDiv = document.getElementById('employeeLoginError');
+            const loginBtn = document.getElementById('employeeLoginBtn');
+            const loginLoading = document.getElementById('employeeLoginLoading');
 
             errorDiv.textContent = '';
             loginBtn.style.display = 'none';
@@ -562,12 +652,61 @@
             }
         }
 
+        // ===== Admin Login =====
+        async function handleAdminLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            const errorDiv = document.getElementById('adminLoginError');
+            const loginBtn = document.getElementById('adminLoginBtn');
+            const loginLoading = document.getElementById('adminLoginLoading');
+
+            errorDiv.textContent = '';
+            loginBtn.style.display = 'none';
+            loginLoading.style.display = 'block';
+
+            try {
+                const response = await fetch(`${API_URL}/auth/verify-admin`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Login failed');
+                }
+
+                authToken = data.access_token;
+                userInfo = data;
+
+                localStorage.setItem('auth_token', authToken);
+                localStorage.setItem('user_info', JSON.stringify(userInfo));
+
+                showDashboard();
+                initChat();
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                loginBtn.style.display = 'block';
+                loginLoading.style.display = 'none';
+            }
+        }
+
         // ===== Dashboard =====
         function showDashboard() {
             document.getElementById('loginContainer').style.display = 'none';
             document.getElementById('dashboardContainer').classList.add('active');
             document.getElementById('userName').textContent = userInfo.employee_name;
-            document.getElementById('userId').textContent = userInfo.employee_id;
+
+            // Show different ID based on user type
+            if (userInfo.user_type === 'admin') {
+                document.getElementById('userId').textContent = 'ADMIN - Full Access';
+                document.getElementById('userId').style.color = '#10b981';
+            } else {
+                document.getElementById('userId').textContent = userInfo.employee_id;
+            }
+
             document.getElementById('userAvatar').textContent = userInfo.employee_name.charAt(0).toUpperCase();
         }
 
@@ -588,7 +727,11 @@
 
         function initChat() {
             messages = [];
-            addMessage('ai', `👋 Welcome, ${userInfo.employee_name.split(' ')[0]}! I'm your personal assistant. I can help you with your profile information and details. What would you like to know?`);
+            if (userInfo.user_type === 'admin') {
+                addMessage('ai', `👋 Welcome, Administrator! You have full access to the employee database. You can ask about any employee, department, performance, leave balance, and generate reports. What would you like to know?`);
+            } else {
+                addMessage('ai', `👋 Welcome, ${userInfo.employee_name.split(' ')[0]}! I'm your personal assistant. I can help you with your profile information and details. What would you like to know?`);
+            }
         }
 
         function addMessage(type, text) {

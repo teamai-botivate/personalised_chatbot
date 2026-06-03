@@ -32,6 +32,7 @@ def verify_token(token: str) -> TokenPayload:
             employee_id=payload.get("employee_id", ""),
             employee_name=payload.get("employee_name", ""),
             mobile_number=payload.get("mobile_number", ""),
+            user_type=payload.get("user_type", "employee"),
         )
     except JWTError:
         raise HTTPException(

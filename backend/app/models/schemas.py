@@ -126,12 +126,14 @@ class LoginResponse(BaseModel):
     employee_id: str
     employee_name: str
     mobile_number: str
+    user_type: str
 
 
 class TokenPayload(BaseModel):
     employee_id: str
     employee_name: str
     mobile_number: str
+    user_type: str = "employee"  # "employee" or "admin"
     exp: Optional[datetime] = None
 
 
