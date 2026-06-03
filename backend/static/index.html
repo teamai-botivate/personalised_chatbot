@@ -859,9 +859,17 @@
         }
 
         // ===== Plain Text Rendering =====
-        function renderPlainText(text) {
-            // Just replace newlines with <br> for readability
-            return text.replace(/\n/g, '<br>');
+        function stripMarkdown(text) {
+            if (!text) return '';
+            let cleaned = text;
+            cleaned = cleaned.replace(/```[\s\S]*?```/g, match => match.replace(/```/g, ''));
+            cleaned = cleaned.replace(/`([^`]+)`/g, '$1');
+            cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '$1');
+            cleaned = cleaned.replace(/__([^_]+)__/g, '$1');
+            cleaned = cleaned.replace(/^#{1,6}\s+/gm, '');
+            cleaned = cleaned.replace(/^\s*[-*+]\s+/gm, '');
+            cleaned = cleaned.replace(/^\s*>\s+/gm, '');
+            return cleaned.trim();
         }
 
         function autoResizeTextarea(textarea) {
@@ -918,8 +926,8 @@
                 const bubble = document.createElement('div');
                 bubble.className = 'message-bubble';
 
-                // Just render plain text with line breaks
-                bubble.innerHTML = renderPlainText(msg.text);
+                // Render plain text only (no markdown or HTML)
+                bubble.textContent = stripMarkdown(msg.text);
 
                 if (msg.type === 'user') {
                     div.appendChild(bubble);

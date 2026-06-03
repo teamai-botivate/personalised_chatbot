@@ -5,6 +5,7 @@ No approval workflows, no manager features.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+import re
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
@@ -97,8 +98,8 @@ async def send_message(
         user_msg = data.message.lower()
         reply = None
 
-        # Check for simple greetings
-        if any(word in user_msg for word in ["hello", "hi", "hey", "namaste"]):
+        # Check for simple greetings (whole words only)
+        if re.search(r"\b(hello|hi|hey|namaste)\b", user_msg):
             reply = f"Hello {user.employee_name}! 👋 How can I help you with your information today?"
 
         # Check for "tell me about me" or "my data" - ONLY for employees, admins should use agent for any query
