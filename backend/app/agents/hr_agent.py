@@ -88,6 +88,7 @@ Important:
 - "What is my company name" → "data_query" (it's about their employment context)
 - "Who is the CEO" / "Tell me about the company" → "general"
 - "What can you help me with" → "general"
+- If the user's Role is admin and they ask about employees, departments, listings, or summaries, classify as "data_query".
 
 If the message contains multiple intents, return them comma-separated.
 Examples:
@@ -96,6 +97,7 @@ Examples:
 - "I want to apply for leave" → "leave_request"
 - "thanks!" → "greeting"
 - "what is botivate" → "general"
+- "list all employees" (admin) → "data_query"
 
 Return ONLY the intent string(s), nothing else.
 """
@@ -297,18 +299,21 @@ async def handle_data_query(state: AgentState) -> AgentState:
         employee_id = state["employee_id"]
         role = state["role"]
 
+        raw_employee_data = state.get("employee_data", {})
+        admin_records = raw_employee_data if isinstance(raw_employee_data, list) else None
+
         # Step 1: ALWAYS fetch the logged-in employee's OWN record first
         # Use the employee_data already verified by chat_router if available
-        own_record = state.get("employee_data", {})
+        own_record = raw_employee_data if isinstance(raw_employee_data, dict) else {}
         
-        if not own_record:
+        if role != "admin" and not own_record:
             print(f"[{state['company_id']}][AGENT DATA QUERY] Checking adapter for direct own_record fetch...")
             db_type = DatabaseType(state.get("db_type", "google_sheets"))
             adapter = await get_adapter(db_type, state["db_config"])
             own_record = await adapter.get_record_by_key(primary_key, employee_id, table_name=validated_schema.master_table) or {}
         
         # Step 2: Pydantic verification — ensure record belongs to THIS employee
-        if own_record:
+        if role != "admin" and own_record:
             found_id = str(own_record.get(primary_key, ""))
             try:
                 verified = VerifiedEmployeeRecord(
@@ -366,6 +371,12 @@ async def handle_data_query(state: AgentState) -> AgentState:
 
         # Step 3: Build data context based on role
         data_context = json.dumps(own_record, indent=2, default=str) if own_record else "No data found."
+        if role == "admin" and admin_records is not None and not own_record:
+            data_context = json.dumps(
+                {"total_records": len(admin_records), "sample_records": admin_records[:10]},
+                indent=2,
+                default=str,
+            )
         if child_tables_data:
             data_context += f"\n\nRelated Records (from other tabs):\n{json.dumps(child_tables_data, indent=2, default=str)}"
         
@@ -377,11 +388,14 @@ async def handle_data_query(state: AgentState) -> AgentState:
         if role in ("hr", "admin", "manager") or any(kw in user_question for kw in team_keywords):
             if any(kw in user_question for kw in team_keywords):
                 print(f"[{state['company_id']}][AGENT DATA QUERY] Team/Dashboard keywords detected. Pulling team data context.")
-                db_type = DatabaseType(state.get("db_type", "google_sheets"))
-                adapter = await get_adapter(db_type, state["db_config"])
-                master_table = validated_schema.master_table
-                records = await adapter.get_all_records(table_name=master_table)
-                extra_context = f"\n\nAdditional team data (you have {role} access. Total employees: {len(records)}):\n{json.dumps(records[:50], indent=2, default=str)}"
+                if admin_records is None:
+                    db_type = DatabaseType(state.get("db_type", "google_sheets"))
+                    adapter = await get_adapter(db_type, state["db_config"])
+                    master_table = validated_schema.master_table
+                    admin_records = await adapter.get_all_records(table_name=master_table)
+                extra_context = f"\n\nAdditional team data (you have {role} access. Total employees: {len(admin_records)}):\n{json.dumps(admin_records[:50], indent=2, default=str)}"
+            elif role == "admin" and admin_records is not None:
+                extra_context = f"\n\nAdditional team data (you have admin access. Total employees: {len(admin_records)}):\n{json.dumps(admin_records[:50], indent=2, default=str)}"
 
         # Step 4: Ask LLM to answer from verified data
         llm = get_llm()
@@ -648,7 +662,15 @@ async def handle_general(state: AgentState) -> AgentState:
     """
     llm = get_llm()
 
-    emp_data = json.dumps(state.get("employee_data", {}), indent=2, default=str)
+    raw_employee_data = state.get("employee_data", {})
+    if isinstance(raw_employee_data, list):
+        emp_data = json.dumps(
+            {"total_records": len(raw_employee_data), "sample_records": raw_employee_data[:20]},
+            indent=2,
+            default=str,
+        )
+    else:
+        emp_data = json.dumps(raw_employee_data, indent=2, default=str)
     company_name = state.get("company_name") or "the company"
     user_msg = state["current_input"]
 

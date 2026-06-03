@@ -88,10 +88,14 @@ async def verify_mobile(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     # Step 4: Find phone column in schema
     phone_column = schema.get("phone", "")
     if not phone_column:
-        # Try alternative names
-        for col_name in ["Phone Number", "phone_number", "Phone", "mobile", "Mobile Number"]:
-            if col_name in schema.get("categories", {}).get("contact", []):
-                phone_column = col_name
+        categories = schema.get("categories") or {}
+        for category_fields in categories.values():
+            for col_name in category_fields:
+                col_lower = str(col_name).lower()
+                if any(token in col_lower for token in ["phone", "mobile", "contact", "whatsapp"]):
+                    phone_column = col_name
+                    break
+            if phone_column:
                 break
 
     if not phone_column:
