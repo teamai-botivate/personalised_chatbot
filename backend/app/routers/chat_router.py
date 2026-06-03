@@ -101,8 +101,8 @@ async def send_message(
         if any(word in user_msg for word in ["hello", "hi", "hey", "namaste"]):
             reply = f"Hello {user.employee_name}! 👋 How can I help you with your information today?"
 
-        # Check for "tell me about me" or "my data"
-        elif any(word in user_msg for word in ["tell", "show", "my data", "my details", "about me", "who am i"]):
+        # Check for "tell me about me" or "my data" - ONLY for employees, admins should use agent for any query
+        elif user_type == "employee" and any(word in user_msg for word in ["tell", "show", "my data", "my details", "about me", "who am i"]):
             if employee_data:
                 # Format employee data in plain text with sections
                 reply_parts = []

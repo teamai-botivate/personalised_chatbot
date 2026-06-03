@@ -892,7 +892,7 @@
         function initChat() {
             messages = [];
             if (userInfo.user_type === 'admin') {
-                addMessage('ai', `👋 Welcome, Administrator! You have full access to the employee database. You can ask about any employee, department, performance, leave balance, and generate reports. What would you like to know?`);
+                addMessage('ai', `👋 Welcome, Admin! You have full access to the employee database. You can ask about any employee, department, performance, leave balance, and generate reports. What would you like to know?`);
             } else {
                 addMessage('ai', `👋 Welcome, ${userInfo.employee_name.split(' ')[0]}! I'm your personal assistant. I can help you with your profile information and details. What would you like to know?`);
             }
