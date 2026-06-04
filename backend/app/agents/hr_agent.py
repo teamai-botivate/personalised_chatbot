@@ -7,6 +7,7 @@ import json
 import os
 import re
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict, Annotated
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
@@ -63,14 +64,27 @@ def get_llm() -> ChatOpenAI:
 @lru_cache(maxsize=1)
 def get_workbook_context() -> str:
     """Load the Finance FMS workbook description used as LLM context."""
-    repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    description_path = os.path.join(repo_dir, "description.txt")
-    try:
-        with open(description_path, "r", encoding="utf-8") as f:
-            return f.read()[:28000]
-    except Exception as e:
-        print(f"[AGENT CONTEXT] Failed to load description.txt: {e}")
-        return ""
+    app_dir = Path(__file__).resolve().parents[1]
+    backend_dir = app_dir.parent
+    repo_dir = backend_dir.parent
+    candidate_paths = [
+        app_dir / "context" / "description.md",
+        app_dir / "context" / "finance_fms_description.md",
+        app_dir / "context" / "description.txt",
+        repo_dir / "description.txt",
+    ]
+
+    for description_path in candidate_paths:
+        if description_path.exists():
+            try:
+                context = description_path.read_text(encoding="utf-8")[:40000]
+                print(f"[AGENT CONTEXT] Loaded workbook context from {description_path}")
+                return context
+            except Exception as e:
+                print(f"[AGENT CONTEXT] Failed to load {description_path}: {e}")
+
+    print(f"[AGENT CONTEXT] No workbook context file found. Checked: {candidate_paths}")
+    return ""
 
 
 def get_relevant_table_names(question: str, schema_map: Dict[str, Any], role: str) -> List[str]:
