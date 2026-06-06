@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
 from app.models.schemas import ChatMessage, ChatResponse, TokenPayload
-from app.models.models import DatabaseConnection
+from app.models.models import DatabaseConnection, Company
 from app.utils.auth import get_current_user
 from app.agents.hr_agent import chat_with_agent
 from app.adapters.adapter_factory import get_adapter
@@ -109,8 +109,8 @@ async def send_message(
     print(f"\n[CHAT LOG] 🗨️ New Chat Request from {user_type.upper()}: '{employee_id}'")
 
     # Fetch active company
-    result = await db.execute(select(__import__('app.models.models', fromlist=['Company']).Company).where(
-        __import__('app.models.models', fromlist=['Company']).Company.is_active == True
+    result = await db.execute(select(Company).where(
+        Company.is_active == True
     ))
     company = result.scalars().first()
 
@@ -217,7 +217,7 @@ async def send_message(
                 db_type=db_conn.db_type.value if db_conn else "google_sheets",
                 user_message=data.message,
                 employee_data=agent_context_data,
-                chat_history=[],
+                chat_history=data.chat_history or [],
                 employee_requests=[],
             )
             reply = agent_result.get("reply", "I'm sorry, something went wrong.")
@@ -225,7 +225,7 @@ async def send_message(
         print(f"[CHAT LOG] ✅ Chat processing completed successfully.")
     except Exception as e:
         print(f"[CHAT LOG] ❌ Chat processing failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+        raise HTTPException(status_code=500, detail="An internal error occurred. Please try again.")
 
     return ChatResponse(
         reply=reply,

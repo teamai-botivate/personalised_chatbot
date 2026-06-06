@@ -3,7 +3,7 @@ Finance FMS - Authentication API Router
 Mobile number verification for client/user access and sheet-backed admin login.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -13,6 +13,7 @@ from app.models.models import Company, DatabaseConnection
 from app.adapters.adapter_factory import get_adapter
 from app.utils.auth import create_access_token
 from app.config import settings
+from app.utils.limiter import limiter
 
 
 class AdminLoginRequest(BaseModel):
@@ -33,6 +34,30 @@ def normalize_phone(value: str) -> str:
         .replace(")", "")
         .replace("+91", "")
     )
+
+
+def verify_admin_password(plain: str, stored: str) -> bool:
+    """Verify an admin password against the value stored in the sheet.
+
+    Supports two formats so existing plaintext entries keep working while new
+    ones can be bcrypt-hashed:
+      - bcrypt hash (starts with "$2a$"/"$2b$"/"$2y$") -> verified via passlib
+      - anything else -> treated as plaintext (logs a warning to encourage
+        migrating that admin's password to a hash)
+    """
+    stored = str(stored or "")
+    if stored.startswith(("$2a$", "$2b$", "$2y$")):
+        try:
+            import bcrypt
+            # bcrypt caps the password at 72 bytes; match that when hashing too.
+            return bcrypt.checkpw(plain.encode("utf-8")[:72], stored.encode("utf-8"))
+        except Exception as e:
+            print(f"[AUTH LOG] ⚠️ bcrypt verify failed: {e}")
+            return False
+    # Plaintext fallback (legacy). Constant-time compare to avoid timing leaks.
+    import secrets
+    print("[AUTH LOG] ⚠️ Admin password stored as plaintext — consider hashing it.")
+    return secrets.compare_digest(plain, stored)
 
 
 def get_first_value(record: dict, candidates: list[str], default: str = "") -> str:
@@ -78,7 +103,8 @@ async def get_active_connection(db: AsyncSession) -> tuple[Company, DatabaseConn
 
 
 @router.post("/verify-mobile", response_model=LoginResponse)
-async def verify_mobile(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def verify_mobile(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
     """
     Mobile number verification for employee access using Google Sheets.
     Employee can only access their own information.
@@ -196,7 +222,8 @@ async def verify_mobile(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/verify-admin", response_model=LoginResponse)
-async def verify_admin(data: AdminLoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def verify_admin(request: Request, data: AdminLoginRequest, db: AsyncSession = Depends(get_db)):
     """
     Admin login backed by the Finance FMS Admin worksheet.
     Admin has full unrestricted access to the workbook.
@@ -236,7 +263,7 @@ async def verify_admin(data: AdminLoginRequest, db: AsyncSession = Depends(get_d
             continue
         if is_active in {"false", "no", "inactive", "disabled", "0"}:
             continue
-        if username.strip().lower() == username_input and password == password_input:
+        if username.strip().lower() == username_input and verify_admin_password(password_input, password):
             matched_admin = record
             break
 

@@ -7,10 +7,14 @@ from contextlib import asynccontextmanager
 import os
 import time
 import logging
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from app.utils.limiter import limiter
 
 # Set up logging for detailed backend tracking
 logging.basicConfig(
@@ -21,7 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger("botivate_api")
 
 from app.config import settings
-from app.database import init_db, async_session_factory
+from app.database import init_db, async_session_factory, get_db
 from app.routers.company_router import router as company_router
 from app.routers.auth_router import router as auth_router
 from app.routers.chat_router import router as chat_router
@@ -37,7 +41,8 @@ scheduler = AsyncIOScheduler()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: create tables, auto-setup DB, start scheduler. Shutdown: stop scheduler."""
+    """Startup: validate secrets, create tables, auto-setup DB, start scheduler. Shutdown: stop scheduler."""
+    settings.validate_production_secrets()
     await init_db()
 
     # Auto-setup database on first startup
@@ -58,6 +63,8 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.middleware("http")
@@ -77,7 +84,20 @@ async def log_requests(request: Request, call_next):
         try:
             body = await request.body()
             if body:
-                logger.info(f"   [PAYLOAD] {body.decode('utf-8')}")
+                body_str = body.decode('utf-8')
+                try:
+                    import json
+                    body_json = json.loads(body_str)
+                    redacted = False
+                    for key in ["password", "mobile_number", "access_token", "token"]:
+                        if key in body_json:
+                            body_json[key] = "***REDACTED***"
+                            redacted = True
+                    if redacted:
+                        body_str = json.dumps(body_json)
+                except Exception:
+                    pass
+                logger.info(f"   [PAYLOAD] {body_str}")
             
             # Put the body back so route handler can read it
             async def receive():
@@ -107,13 +127,23 @@ async def log_requests(request: Request, call_next):
         raise e
 
 # ── CORS ──────────────────────────────────────────────────
+# Browsers reject the combination of allow_origins=["*"] with
+# allow_credentials=True. So when origins are an explicit allow-list we enable
+# credentials; when left at the "*" default we must turn credentials off.
 
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",")]
+_wildcard_origins = ALLOWED_ORIGINS == ["*"]
+
+if _wildcard_origins and settings.app_env.lower() != "development":
+    logger.warning(
+        "⚠️ ALLOWED_ORIGINS is '*' in a non-development environment. "
+        "Set an explicit comma-separated origin list to allow credentialed requests."
+    )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=not _wildcard_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -124,13 +154,81 @@ app.include_router(company_router)
 app.include_router(auth_router)
 app.include_router(chat_router)
 
-# ── Serve Static Files ─────────────────────────────────────
-static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
-if os.path.exists(static_dir):
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
-
 # ── Health Check ──────────────────────────────────────────
+# NOTE: must be registered BEFORE the catch-all static mount on "/",
+# otherwise StaticFiles swallows /api/health and returns 404.
 
 @app.get("/api/health")
-async def health():
-    return {"status": "healthy"}
+async def health(db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import text, select
+    from app.models.models import DatabaseConnection
+    from app.adapters.adapter_factory import get_adapter
+
+    health_status = {
+        "status": "healthy",
+        "database": "untested",
+        "google_sheets": "untested"
+    }
+    
+    # Check SQLite database
+    try:
+        await db.execute(text("SELECT 1"))
+        health_status["database"] = "healthy"
+    except Exception as e:
+        logger.error(f"Health check DB error: {e}")
+        health_status["database"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "degraded"
+        
+    # Check Google Sheets Connection
+    try:
+        result = await db.execute(
+            select(DatabaseConnection).where(
+                DatabaseConnection.is_active == True
+            )
+        )
+        db_conn = result.scalars().first()
+        if db_conn:
+            adapter = await get_adapter(db_conn.db_type, db_conn.connection_config)
+            if hasattr(adapter, "spreadsheet") and adapter.spreadsheet:
+                health_status["google_sheets"] = "healthy"
+            else:
+                health_status["google_sheets"] = "disconnected"
+                health_status["status"] = "degraded"
+        else:
+            health_status["google_sheets"] = "no_active_connection"
+    except Exception as e:
+        logger.error(f"Health check Sheets error: {e}")
+        health_status["google_sheets"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "degraded"
+
+    return health_status
+
+
+# ── Serve the React SPA (built by Vite) ────────────────────
+# The frontend is a client-side single-page app (wouter routes: "/", "/chat").
+# Hashed build assets live under /assets and are served directly; every other
+# non-API path falls back to index.html so deep links / refreshes on "/chat"
+# don't 404. Mounted LAST so /api/* routes always take precedence.
+static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+if os.path.exists(static_dir):
+    from fastapi.responses import FileResponse
+
+    assets_dir = os.path.join(static_dir, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    index_path = os.path.join(static_dir, "index.html")
+
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        """Serve a real static file if it exists, else fall back to index.html."""
+        # Never hijack API routes (already registered above, but be defensive).
+        if full_path.startswith("api/"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not found")
+
+        candidate = os.path.join(static_dir, full_path)
+        if full_path and os.path.isfile(candidate):
+            return FileResponse(candidate)
+
+        return FileResponse(index_path)

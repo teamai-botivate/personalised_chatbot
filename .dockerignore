@@ -19,3 +19,8 @@ node_modules/
 .vscode/
 botivate_master.db
 chroma_data/
+
+# React UI workspace — source only; the built output is committed to
+# backend/static/ and served from there. Not needed in the image.
+Replit-UI/
+backend/static/*.bak

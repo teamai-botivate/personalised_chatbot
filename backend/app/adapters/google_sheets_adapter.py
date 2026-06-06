@@ -32,8 +32,27 @@ class GoogleSheetsAdapter(BaseDatabaseAdapter):
         self.client: Optional[gspread.Client] = None
         self.spreadsheet = None
         self.worksheet = None
-        self.worksheet = None
         self._headers_cache: Dict[str, List[str]] = {}
+        from cachetools import TTLCache
+        self._records_cache = TTLCache(maxsize=100, ttl=180)
+
+    def invalidate_cache(self, table_name: Optional[str] = None) -> None:
+        """Clear cached records for a specific worksheet or all worksheets."""
+        if hasattr(self, "_records_cache"):
+            if table_name:
+                target_title = table_name
+                if self.spreadsheet:
+                    try:
+                        target_title = self.spreadsheet.worksheet(table_name).title
+                    except Exception:
+                        pass
+                keys_to_del = [k for k in self._records_cache.keys() if k[1] == target_title]
+                for k in keys_to_del:
+                    del self._records_cache[k]
+                print(f"[GOOGLE SHEETS] Cache invalidated for table '{target_title}'")
+            else:
+                self._records_cache.clear()
+                print("[GOOGLE SHEETS] Cache invalidated for all tables")
 
     @staticmethod
     def _cell_value(row: List[str], index: int) -> str:
@@ -253,10 +272,18 @@ class GoogleSheetsAdapter(BaseDatabaseAdapter):
         return self._headers_cache[title]
 
     async def get_all_records(self, table_name: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Fetch all records as a list of dicts."""
+        """Fetch all records as a list of dicts with TTL caching."""
         ws = self._get_target_worksheet(table_name)
+        title = ws.title
+        spreadsheet_id = self.spreadsheet.id if self.spreadsheet else ""
+        cache_key = (spreadsheet_id, title)
+
+        if hasattr(self, "_records_cache") and cache_key in self._records_cache:
+            print(f"[GOOGLE SHEETS] ✓ Returning CACHED records for worksheet '{title}'")
+            return self._records_cache[cache_key]
+
         try:
-            return ws.get_all_records()
+            records = ws.get_all_records()
         except Exception as exc:
             error_text = str(exc).lower()
             duplicate_header_error = "header row" in error_text and "duplicates" in error_text
@@ -267,7 +294,11 @@ class GoogleSheetsAdapter(BaseDatabaseAdapter):
                 f"[GOOGLE SHEETS] ⚠️ Falling back to flexible parser for worksheet "
                 f"'{ws.title}' because headers are not unique."
             )
-            return self._records_from_values(ws.get_all_values())
+            records = self._records_from_values(ws.get_all_values())
+
+        if hasattr(self, "_records_cache"):
+            self._records_cache[cache_key] = records
+        return records
 
     async def get_record_by_key(self, key_column: str, key_value: str, table_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Find a single record by its primary key column value."""
@@ -335,6 +366,7 @@ class GoogleSheetsAdapter(BaseDatabaseAdapter):
             # batch_update is more compatible across gspread versions
             ws.batch_update(updates_list)
 
+        self.invalidate_cache(table_name or (self.worksheet.title if self.worksheet else None))
         return True
 
     async def create_record(self, data: Dict[str, Any], table_name: Optional[str] = None) -> bool:
@@ -360,6 +392,7 @@ class GoogleSheetsAdapter(BaseDatabaseAdapter):
 
         # Append to the bottom
         ws.append_row(new_row)
+        self.invalidate_cache(table_name or (self.worksheet.title if self.worksheet else None))
         return True
 
     async def add_column(self, column_name: str, default_values: Optional[List[Any]] = None, table_name: Optional[str] = None) -> bool:
@@ -389,6 +422,7 @@ class GoogleSheetsAdapter(BaseDatabaseAdapter):
 
         # Refresh headers cache
         self._headers_cache[ws.title] = ws.row_values(1)
+        self.invalidate_cache(table_name or (self.worksheet.title if self.worksheet else None))
         return True
 
     async def update_column_values(self, column_name: str, key_column: str,
@@ -418,6 +452,7 @@ class GoogleSheetsAdapter(BaseDatabaseAdapter):
         if cells_to_update:
             ws.update_cells(cells_to_update)
 
+        self.invalidate_cache(table_name or (self.worksheet.title if self.worksheet else None))
         return True
 
     async def get_column_values(self, column_name: str, table_name: Optional[str] = None) -> List[Any]:

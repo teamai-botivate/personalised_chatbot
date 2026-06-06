@@ -101,11 +101,21 @@ async def answer_from_policies(company_id: str, question: str) -> str:
 
     context = "\n\n---\n\n".join([doc.page_content for doc in relevant_docs])
 
-    llm = ChatOpenAI(
-        model=settings.openai_model,
-        api_key=settings.openai_api_key,
-        temperature=0.1,
-    )
+    if settings.fast_llm_api_key and settings.fast_llm_model:
+        kwargs = {
+            "model": settings.fast_llm_model,
+            "api_key": settings.fast_llm_api_key,
+            "temperature": 0.1,
+        }
+        if settings.fast_llm_base_url:
+            kwargs["base_url"] = settings.fast_llm_base_url
+        llm = ChatOpenAI(**kwargs)
+    else:
+        llm = ChatOpenAI(
+            model=settings.openai_model,
+            api_key=settings.openai_api_key,
+            temperature=0.1,
+        )
 
     system_msg = SystemMessage(content="""You are an HR assistant that answers ONLY based on the provided company policy documents.
 

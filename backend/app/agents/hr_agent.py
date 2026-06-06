@@ -61,6 +61,20 @@ def get_llm() -> ChatOpenAI:
     )
 
 
+def get_fast_llm() -> ChatOpenAI:
+    """Return the fast LLM for data answers and policies. Falls back to primary if not configured."""
+    if settings.fast_llm_api_key and settings.fast_llm_model:
+        kwargs = {
+            "model": settings.fast_llm_model,
+            "api_key": settings.fast_llm_api_key,
+            "temperature": 0.2,
+        }
+        if settings.fast_llm_base_url:
+            kwargs["base_url"] = settings.fast_llm_base_url
+        return ChatOpenAI(**kwargs)
+    return get_llm()  # Fallback to primary
+
+
 @lru_cache(maxsize=1)
 def get_workbook_context() -> str:
     """Load the Finance FMS workbook description used as LLM context."""
@@ -87,11 +101,54 @@ def get_workbook_context() -> str:
     return ""
 
 
+@lru_cache(maxsize=1)
+def get_fms_step_reference() -> str:
+    """Load the compact FMS step reference for prompt injection."""
+    ref_path = Path(__file__).resolve().parents[1] / "context" / "fms_step_reference.md"
+    if ref_path.exists():
+        try:
+            return ref_path.read_text(encoding="utf-8")
+        except Exception as e:
+            print(f"[AGENT REF] Failed to load FMS reference from {ref_path}: {e}")
+    return ""
+
+
 def get_relevant_table_names(question: str, schema_map: Dict[str, Any], role: str) -> List[str]:
     """Select Finance FMS worksheets likely needed for the current question."""
     child_tables = schema_map.get("child_tables") or {}
     available = set(child_tables.keys())
     q = question.lower()
+
+    # Add Hinglish/domain alias → English canonical keyword mapping
+    HINGLISH_ALIASES = {
+        # Hinglish query words → English keywords that the existing keyword_map handles
+        "kitne": "total",    "kitna": "amount",     "kaun": "doer",
+        "kahan": "status",   "kab": "step",         "kya": "status",
+        "pending": "status", "ho gaya": "done",     "hua": "done",
+        "dikha": "dashboard","dekhna": "dashboard", "batao": "status",
+        "paisa": "amount",   "rashi": "amount",     "loan": "loan",
+        "wala": "",          "ki": "",              "ka": "",
+        "pahuncha": "status","aaya": "status",      "mila": "status",
+        "baki": "pending",   "bacha": "pending",    "hua kya": "status",
+
+        # FMS abbreviation aliases → keyword triggers
+        "p-cl": "step",      "s-cl": "step",      "pcl": "step",
+        "scl": "step",       "bn": "step",        "tev": "step",
+        "ddr": "step",       "cma": "step",       "pdc": "step",
+        "set prep": "step",  "one pager": "step",
+        "sl": "sanction",    "sanction letter": "sanction",
+
+        # Common Hinglish misspellings of system terms
+        "deor": "doer",      "doyar": "doer",     "teem": "team",
+        "dashbord": "dashboard", "stetus": "status",
+    }
+
+    # Expand Hinglish aliases into canonical keywords using word boundaries where appropriate
+    expanded_q = q
+    for alias, canonical in HINGLISH_ALIASES.items():
+        if re.search(r"\b" + re.escape(alias) + r"\b", q):
+            expanded_q += f" {canonical}"
+    q = expanded_q
 
     candidates: List[str] = []
 
@@ -221,6 +278,11 @@ def extract_query_identifiers(question: str, admin_records: Optional[List[Dict[s
         if candidate:
             identifiers.append(candidate)
 
+    # Extract FMS Client Job Code pattern (e.g. BAN-F25F-TL02)
+    job_code_match = re.search(r"\b[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+\b", question, re.IGNORECASE)
+    if job_code_match:
+        identifiers.append(job_code_match.group(0).upper())
+
     code_match = re.search(r"\b[A-Z]{2,}\d+\b", question)
     if code_match:
         identifiers.append(code_match.group(0))
@@ -249,7 +311,7 @@ async def understand_intent(state: AgentState) -> AgentState:
     """Classify the user's intent(s) — supports multi-intent detection."""
     llm = get_llm()
 
-    workbook_context = state.get("workbook_context") or ""
+    fms_ref = get_fms_step_reference()
 
     prompt = f"""You are an intent classifier for a Finance FMS chatbot.
 
@@ -273,12 +335,18 @@ Available intent categories:
 - "general" — Anything else: conversational chat, what can you do, broad clarification, etc.
 
 Important:
-- Finance FMS workbook context summary:
-{workbook_context[:2500]}
+- Finance FMS Step Reference (abbreviations, steps, key sheets):
+{fms_ref}
 - If the user asks about workbook data or a sheet described above, classify as "data_query".
 - If the user asks what a sheet/column/step means, classify as "policy_query" or "general".
 - "What can you help me with" → "general"
 - If the user's Role is admin and they ask about lists, totals, dashboards, reports, or summaries, classify as "data_query".
+- Users may write in Hinglish (Romanized Hindi/English mix).
+  Example: "HOACPL ka step 7 kahan tak pahuncha" -> "data_query"
+  Example: "Danesh sir ke kitne projects pending" -> "data_query"
+  Example: "PNB wala case ka sanction letter aaya kya" -> "data_query"
+  Example: "TEV status check karo" -> "data_query"
+- Treat Hinglish queries the same as English queries for intent classification.
 
 If the message contains multiple intents, return them comma-separated.
 Examples:
@@ -372,7 +440,7 @@ async def handle_policy_query(state: AgentState) -> AgentState:
         state["actions"] = []
         return state
 
-    llm = get_llm()
+    llm = get_fast_llm()
     prompt = f"""You are a Finance FMS workbook expert. Answer using ONLY this workbook description.
 
 Workbook description:
@@ -542,7 +610,7 @@ async def handle_data_query(state: AgentState) -> AgentState:
                 extra_context = f"\n\nAdditional RAW DATA context (you have {role} access. Total records: {len(admin_records)}):\n{json.dumps(summary_records, indent=2, default=str)}"
 
         # Step 4: Ask LLM to answer from verified data
-        llm = get_llm()
+        llm = get_fast_llm()
         print(f"[{state['company_id']}][AGENT DATA QUERY] Context prepared. Sending context to AI (Length: {len(data_context) + len(extra_context)} chars).")
 
         # Different prompt for admin vs employee
@@ -579,6 +647,9 @@ Rules:
 - For numeric questions, provide calculations and summaries.
 - For listing questions, show results in bullet format.
 - Mention which sheet(s) your answer came from when useful.
+- The user may ask in Hinglish (mixed Hindi-English). Always respond in the same language style as the user. If they ask in Hinglish, reply in Hinglish. If they ask in English, reply in English.
+- When users mention FMS step numbers (e.g., "step 7"), refer to the actual step name and sub-tasks.
+- When users mention abbreviations (P-CL, BN, TEV, DDR, etc.), expand them in your answer.
 """
         response = await llm.ainvoke([HumanMessage(content=answer_prompt)])
         state["response"] = response.content.strip()

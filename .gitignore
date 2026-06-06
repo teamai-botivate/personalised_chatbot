@@ -7,6 +7,13 @@ ENV/
 env.bak/
 venv.bak/
 
+# React UI workspace — nested git repo; source kept separately, built
+# output committed to backend/static/. Do not commit as a gitlink.
+Replit-UI/
+
+# UI backups / scratch
+backend/static/*.bak
+
 # Credentials & Secrets
 *.json
 !.env.example
@@ -27,6 +34,12 @@ oauth_*.json
 .chroma/
 chroma_db/
 chromadb/
+chroma_data/
+backend/chroma_data/
+
+# Runtime upload storage (regenerated; do not commit)
+uploads/
+backend/uploads/
 
 # Python
 __pycache__/

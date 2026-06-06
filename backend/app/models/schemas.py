@@ -142,6 +142,7 @@ class TokenPayload(BaseModel):
 class ChatMessage(BaseModel):
     message: str
     attachments: Optional[List[str]] = None
+    chat_history: Optional[List[Dict[str, str]]] = None
 
 
 class ChatResponse(BaseModel):
