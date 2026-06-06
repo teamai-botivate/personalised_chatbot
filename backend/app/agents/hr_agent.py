@@ -457,7 +457,7 @@ Workbook description:
 Question: {state['current_input']}
 
 Rules:
-- LANGUAGE — reply in the SAME language as the Question: plain English → English; Romanized Hindi/English mix → Hinglish; Devanagari Hindi → Hindi. When unsure, default to English. Keep sheet/column names and abbreviations as-is.
+- LANGUAGE — SCRIPT decides first: a Question in Latin/Roman letters MUST be answered in Latin/Roman letters (NEVER Devanagari unless the Question contains Devanagari characters अ-ह). Then: plain English → English; Romanized Hindi/Hinglish → Hinglish (Latin letters); Devanagari → Hindi. Default to English when unsure. Keep sheet/column names and abbreviations as-is.
 - Explain sheet purpose, columns, and connections precisely.
 - If the description does not contain the answer, say so.
 - Keep the answer concise and practical.
@@ -648,11 +648,13 @@ Finance FMS Workbook Description:
 Question: {state['current_input']}
 
 Rules:
-- LANGUAGE — match the user's language EXACTLY. Detect the language of the Question above and reply in that SAME language. This is mandatory:
-    • If the Question is in plain English (Latin script, English words) → reply in English ONLY. Do NOT add Hindi/Hinglish words.
-    • If the Question is in Hinglish (Romanized Hindi mixed with English, e.g. "kitne clients hai", "iska status kya hai") → reply in Hinglish.
-    • If the Question is in Hindi (Devanagari script, e.g. "कितने क्लाइंट हैं") → reply in Hindi (Devanagari).
-  Sheet names, column names, Client Job Codes, and FMS abbreviations (P-CL, BN, TEV, DDR) stay as-is in every language. When unsure, default to English.
+- LANGUAGE — match the user EXACTLY, and the SCRIPT is the deciding factor:
+    • STEP 1 — look at the script of the Question. If it is written in Latin/Roman letters (a-z), you MUST reply in Latin/Roman letters. NEVER reply in Devanagari (Hindi script) unless the user's question itself contains Devanagari characters (अ-ह). A Romanized question like "Mujhe mere clients ke baare mei batao" is NOT a reason to use Devanagari.
+    • STEP 2 — within Latin script, pick the style:
+        – Plain English (e.g. "Tell me about my clients", "What is the status?") → reply in plain English ONLY.
+        – Hinglish / Romanized Hindi (e.g. "Mujhe mere clients ke baare mei batao", "kitne clients hai", "iska status kya hai") → reply in Hinglish (Romanized, Latin letters). Do NOT switch to Devanagari.
+    • Only if the Question actually contains Devanagari characters (e.g. "कितने क्लाइंट हैं") → reply in Devanagari Hindi.
+  Sheet names, column names, Client Job Codes, numbers, currency, and FMS abbreviations (P-CL, BN, TEV, DDR) stay as-is in every language. When unsure, default to English.
 - Answer ONLY from the data provided.
 - Use the workbook description to understand sheet names, columns, joins, and meanings.
 - For authenticated non-admin users, do not expose unrelated client records.
@@ -949,7 +951,7 @@ Your job is to help users understand and query the Finance FMS workbook naturall
 5. **If the question is completely unrelated to Finance FMS** → politely steer back to loan files, client status, banks, queries, reports, sanction letters, steps, doers, and dashboards.
 
 ## Style:
-- LANGUAGE — reply in the SAME language as the user's message: plain English → English ONLY (no Hindi/Hinglish words); Romanized Hindi/English mix → Hinglish; Devanagari Hindi → Hindi. When unsure, default to English. Keep sheet/column names, Client Job Codes, and abbreviations as-is.
+- LANGUAGE — SCRIPT decides first: if the user's message is in Latin/Roman letters, you MUST reply in Latin/Roman letters — NEVER Devanagari unless the message itself contains Devanagari characters (अ-ह). Then pick style: plain English message → reply English ONLY (no Hindi words); Romanized Hindi/Hinglish (e.g. "Mujhe mere clients ke baare mei batao") → reply Hinglish in Latin letters; Devanagari message → reply Devanagari Hindi. When unsure, default to English. Keep sheet/column names, Client Job Codes, and abbreviations as-is.
 - Be warm, concise, and professional.
 - Use **bold** for key facts and bullet points for lists.
 - Never invent data that isn't in the workbook description or provided sheet rows.
