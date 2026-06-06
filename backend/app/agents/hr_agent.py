@@ -76,8 +76,16 @@ def get_fast_llm() -> ChatOpenAI:
 
 
 @lru_cache(maxsize=1)
+@lru_cache(maxsize=1)
 def get_workbook_context() -> str:
-    """Load the Finance FMS workbook description used as LLM context."""
+    """Load the Finance FMS workbook description used as LLM context.
+
+    Cached: the description file only changes on deploy, so reading it once and
+    holding it in memory is safe and avoids a disk read + re-slice on every
+    message. (Live sheet *data* is fetched separately with its own TTL cache,
+    so caching this static schema reference does not affect answer freshness.)
+    The full compressed reference now fits in the budget — all 43 sheets.
+    """
     app_dir = Path(__file__).resolve().parents[1]
     backend_dir = app_dir.parent
     repo_dir = backend_dir.parent
@@ -91,8 +99,8 @@ def get_workbook_context() -> str:
     for description_path in candidate_paths:
         if description_path.exists():
             try:
-                context = description_path.read_text(encoding="utf-8")[:40000]
-                print(f"[AGENT CONTEXT] Loaded workbook context from {description_path}")
+                context = description_path.read_text(encoding="utf-8")[:60000]
+                print(f"[AGENT CONTEXT] Loaded workbook context from {description_path} ({len(context):,} chars)")
                 return context
             except Exception as e:
                 print(f"[AGENT CONTEXT] Failed to load {description_path}: {e}")
