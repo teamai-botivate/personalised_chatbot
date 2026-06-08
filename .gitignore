@@ -1,5 +1,7 @@
-# Environments (except .env.example which is template)
+# ── Environments & secrets ────────────────────────────────
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -7,19 +9,9 @@ ENV/
 env.bak/
 venv.bak/
 
-# Old Replit UI workspace (nested git repo). Superseded by frontend/ which is
-# a tracked, standalone Vite app deployed on Vercel. Keep ignored / can delete.
-Replit-UI/
-
-# Frontend (Vite app, deployed on Vercel) — track source, ignore build output.
-frontend/node_modules/
-frontend/dist/
-frontend/.tsbuildinfo
-
-# Backend no longer serves the SPA; static dir is obsolete.
-backend/static/
-
-# Credentials & Secrets
+# Credentials & keys (note: *.json is broad — tracked JSON config files like
+# package.json / tsconfig.json / vercel.json are re-included in their own
+# folder's .gitignore, e.g. frontend/.gitignore)
 *.json
 !.env.example
 credentials.json
@@ -32,7 +24,16 @@ oauth_*.json
 *.key
 *.cert
 
-# Databases
+# ── Frontend (Vite app → Vercel) ──────────────────────────
+# Track source; ignore only build artifacts.
+frontend/node_modules/
+frontend/dist/
+frontend/.tsbuildinfo
+
+# Old Replit UI workspace (nested git repo), superseded by frontend/.
+Replit-UI/
+
+# ── Databases & runtime data (regenerated) ────────────────
 *.sqlite
 *.sqlite3
 *.db
@@ -41,12 +42,10 @@ chroma_db/
 chromadb/
 chroma_data/
 backend/chroma_data/
-
-# Runtime upload storage (regenerated; do not commit)
 uploads/
 backend/uploads/
 
-# Python
+# ── Python ────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -58,31 +57,28 @@ dist/
 build/
 *.egg-info/
 
-# Node / Frontend
-frontend/node_modules/
+# ── Node ──────────────────────────────────────────────────
 node_modules/
 npm-debug.log
 yarn-error.log
-dist/
-build/
 .next/
 out/
 
-# IDE & OS
+# ── IDE & OS ──────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 .DS_Store
 Thumbs.db
 
-# Agent/Subagent tracking
+# ── Agent/subagent tracking ───────────────────────────────
 .gemini/
 .agents/
 .agent/
 _agents/
 _agent/
 
-# Deployment (old files)
+# ── Old deployment / scratch files ────────────────────────
 backenddeploy.md
 frontenddeploy.md
 Procfile
@@ -90,14 +86,14 @@ build.sh
 quick-start.bat
 quick-start.sh
 start.sh
-
 docker-compose.yml
 fix_urls.py
 backend/setup_data.py
+backend/runtime.txt
 render.yaml
 
-# Temporary documentation — ignore loose scratch docs, but keep the curated
-# docs/ folder, CLAUDE.md, and the context schema files.
+# ── Documentation ─────────────────────────────────────────
+# Ignore loose scratch .md/.txt at repo level, but keep curated docs.
 *.md
 !CLAUDE.md
 !docs/
@@ -108,7 +104,6 @@ render.yaml
 !docs/
 !docs/**
 !backend/app/context/*.txt
-backend/runtime.txt
 
 # Old folders
 ai_prompts/
