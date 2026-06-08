@@ -665,6 +665,7 @@ Rules:
 - Mention which sheet(s) your answer came from when useful.
 - When users mention FMS step numbers (e.g., "step 7"), refer to the actual step name and sub-tasks.
 - When users mention abbreviations (P-CL, BN, TEV, DDR, etc.), expand them in your answer.
+- LINKS — whenever a field value is a URL (it starts with http:// or https://, e.g. an Attachment URL, document link, or step URL), output it as a clickable Markdown link, NOT plain text. Use the format `[Open](<the full url>)` or `[<label>](<the full url>)`. Example: if the data has `URL: https://drive.google.com/file/d/abc`, write `URL: [Open](https://drive.google.com/file/d/abc)`. NEVER write a link label like "Open now" without the actual URL in parentheses — if you don't have the real URL value, omit the link entirely.
 """
         response = await llm.ainvoke([HumanMessage(content=answer_prompt)])
         state["response"] = response.content.strip()
