@@ -1,0 +1,8 @@
+This guide is obsolete.
+
+The project moved from a single vanilla-JS service to a split deployment:
+  - Frontend (React/Vite)  -> Vercel
+  - Backend  (FastAPI)     -> Render (Docker)
+
+See docs/DEPLOYMENT.md for the current, accurate deployment steps,
+and CLAUDE.md (repo root) for the architecture overview.

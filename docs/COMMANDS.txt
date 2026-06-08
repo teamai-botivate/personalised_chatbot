@@ -1,0 +1,22 @@
+Command reference — see docs/DEPLOYMENT.md for full instructions.
+
+BACKEND (from backend/)
+  cp .env.example .env
+  pip install -r requirements.txt
+  python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+  pytest tests/ -v
+
+FRONTEND (from frontend/)
+  npm install
+  npm run dev            # local dev server (port 5173)
+  npm run build          # production build -> dist/
+
+DOCKER (backend, from repo root — used by Render)
+  docker build -f Dockerfile -t finance-fms:latest .
+  docker run -p 8000:8000 --env-file .env finance-fms:latest
+
+GENERATE A JWT SECRET
+  python -c "import secrets; print(secrets.token_hex(32))"
+
+DEPLOY
+  Push to the deploy branch -> Render (backend) and Vercel (frontend) auto-build.

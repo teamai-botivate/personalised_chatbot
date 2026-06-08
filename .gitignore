@@ -96,17 +96,19 @@ fix_urls.py
 backend/setup_data.py
 render.yaml
 
-# Temporary documentation (keep deployment guides)
+# Temporary documentation — ignore loose scratch docs, but keep the curated
+# docs/ folder, CLAUDE.md, and the context schema files.
 *.md
-!DEPLOYMENT.md
+!CLAUDE.md
+!docs/
+!docs/**
 !backend/app/context/
 !backend/app/context/*.md
 *.txt
-!COMMANDS.txt
-!FINAL_SETUP.txt
+!docs/
+!docs/**
 !backend/app/context/*.txt
 backend/runtime.txt
 
 # Old folders
 ai_prompts/
-docs/
